@@ -11,7 +11,6 @@ class PrintText extends BaseCommand
 {
     protected $content;
     protected $origin_id;
-    protected $machine_code;
     protected $url = 'https://open-api.10ss.net/print/index';
 
     /**
@@ -51,26 +50,6 @@ class PrintText extends BaseCommand
     public function setOriginId($origin_id)
     {
         $this->origin_id = $origin_id;
-        return $this;
-    }
-
-    /**
-     * 获取设备代码
-     * @return mixed
-     */
-    public function getMachineCode()
-    {
-        return $this->machine_code;
-    }
-
-    /**
-     * 设置设备代码
-     * @param mixed $machine_code
-     * @return PrintText
-     */
-    public function setMachineCode($machine_code)
-    {
-        $this->machine_code = $machine_code;
         return $this;
     }
 }

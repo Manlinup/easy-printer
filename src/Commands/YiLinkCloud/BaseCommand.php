@@ -18,7 +18,9 @@ class BaseCommand extends AbstractCommand
     protected $timestamp;    // 当前命令的时间戳
     protected $client_id;    // 当前终端编号
     protected $access_token; // 当前请求令牌
+    protected $refresh_token;// 更新access_token令牌
     protected $url;          // 当前请求的路径
+    protected $machine_code; // 易联云打印机终端号
 
     /**
      * 获取请求的UUID
@@ -130,6 +132,42 @@ class BaseCommand extends AbstractCommand
     }
 
     /**
+     * @return mixed
+     */
+    public function getRefreshToken ()
+    {
+        return $this->refresh_token;
+    }
+
+    /**
+     * @param mixed $refresh_token
+     */
+    public function setRefreshToken ($refresh_token): void
+    {
+        $this->refresh_token = $refresh_token;
+    }
+
+    /**
+     * 获取设备代码
+     * @return mixed
+     */
+    public function getMachineCode()
+    {
+        return $this->machine_code;
+    }
+
+    /**
+     * 设置设备代码
+     * @param $machine_code
+     * @return $this
+     */
+    public function setMachineCode($machine_code)
+    {
+        $this->machine_code = $machine_code;
+        return $this;
+    }
+
+    /**
      * 对当前请求进行自签名
      * @param $clientSecret
      * @throws Exception
@@ -150,6 +188,15 @@ class BaseCommand extends AbstractCommand
     }
 
     /**
+     * 防止url重名，子类需要覆写该方法
+     * @return null
+     */
+    public function getPushUrl()
+    {
+        return null;
+    }
+
+    /**
      * 当前类转为请求参数
      * @return array
      */
@@ -157,6 +204,9 @@ class BaseCommand extends AbstractCommand
     {
         $data = $this->toArray();
         unset($data['$url']);
+        if (!empty($this->getPushUrl())) {
+            $data['url'] = $this->getPushUrl();
+        }
         return $data;
     }
 }

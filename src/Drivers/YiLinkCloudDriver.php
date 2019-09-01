@@ -18,17 +18,19 @@ class YiLinkCloudDriver implements DriverInterface
     protected $clientId;
     protected $clientSecret;
     protected $tokenCacheFile;
+    protected $refreshTokenCacheFile;
 
     /**
      * YiLinkCloudDriver constructor.
      * @param $clientId
      * @param $clientSecret
      */
-    function __construct($clientId, $clientSecret)
+    function __construct ($clientId, $clientSecret)
     {
-        $this->clientId = $clientId;
-        $this->clientSecret = $clientSecret;
-        $this->tokenCacheFile = sys_get_temp_dir() . 'YiLinkCloud_' . $clientId . '.cache';
+        $this->clientId                 = $clientId;
+        $this->clientSecret             = $clientSecret;
+        $this->tokenCacheFile           = sys_get_temp_dir() . 'YiLinkCloud_' . $clientId . '.cache';
+        $this->refreshTokenCacheFile    = sys_get_temp_dir() . 'YiLinkCloud_' . $clientId . '.refresh_token_cache';
     }
 
     /**
@@ -37,7 +39,7 @@ class YiLinkCloudDriver implements DriverInterface
      * @return array
      * @throws Throwable
      */
-    function sendCommand($commandPack)
+    function sendCommand ($commandPack): array
     {
         $accessToken = $this->getAccessToken();
         $commandPack->setClientId($this->clientId);
@@ -51,11 +53,10 @@ class YiLinkCloudDriver implements DriverInterface
      * 获取请求令牌
      * @throws Throwable
      */
-    function getAccessToken()
+    function getAccessToken ()
     {
         $cacheToken = $this->getTokenCache();
         if (is_null($cacheToken)) {
-
             $command = new GetAccessToken();
             $command->setClientId($this->clientId);
             $command->prepareCommand($this->clientSecret);
@@ -67,6 +68,8 @@ class YiLinkCloudDriver implements DriverInterface
             }
 
             $this->setTokenCache($responseData['body']['access_token']);
+            $this->setRefreshToken($responseData['body']['refresh_token']);
+
             $cacheToken = $responseData['body']['access_token'];
         }
 
@@ -74,16 +77,57 @@ class YiLinkCloudDriver implements DriverInterface
     }
 
     /**
+     * 通过refresh_token刷新access_token令牌
+     * @return mixed
+     * @throws \EasySwoole\HttpClient\Exception\InvalidUrl
+     * @throws Throwable
+     */
+    public function refreshToken (): string
+    {
+        $command = new GetAccessToken();
+        $command->setClientId($this->clientId);
+        $command->prepareCommand($this->clientSecret);
+        $command->setRefreshToken($this->getRefreshToken());
+        $httpClient = new HttpClient($command->getUrl());
+        $responseData = $this->checkResponse($httpClient->post($command->toRequestParam()));
+
+        if (!isset($responseData['body']['access_token']) || empty($responseData['body']['access_token'])) {
+            throw new Exception('YiLinkCloud GetAccessToken Error!');
+        }
+
+        $this->setTokenCache($responseData['body']['access_token']);
+        $this->setRefreshToken($responseData['body']['refresh_token']);
+
+        $cacheToken = $responseData['body']['access_token'];
+        return $cacheToken;
+    }
+
+    /**
      * 读请求令牌缓存
      * @return string|null
      */
-    private function getTokenCache()
+    private function getTokenCache(): ?string
     {
         if (file_exists($this->tokenCacheFile) && $fileContent = file_get_contents($this->tokenCacheFile)) {
             $decodeContent = unserialize($fileContent);
             return isset($decodeContent['accessToken']) ? $decodeContent['accessToken'] : null;
         }
         return null;
+    }
+
+    private function getRefreshToken(): ?string
+    {
+        if (file_exists($this->refreshTokenCacheFile) && $fileContent = file_get_contents($this->refreshTokenCacheFile)) {
+            $decodeContent = unserialize($fileContent);
+            return isset($decodeContent['refreshToken']) ? $decodeContent['refreshToken'] : null;
+        }
+        return null;
+    }
+
+    private function setRefreshToken($refreshToken)
+    {
+        $content = serialize(['refreshToken' => $refreshToken, 'saveTime' => time()]);
+        return file_put_contents($this->refreshTokenCacheFile, $content);
     }
 
     /**
@@ -110,10 +154,11 @@ class YiLinkCloudDriver implements DriverInterface
     /**
      * 检查响应内容
      * @param Response $comResponse
-     * @return array
-     * @throws Exception
+     * @return array|null
+     * @throws Throwable
+     * @throws \EasySwoole\HttpClient\Exception\InvalidUrl
      */
-    private function checkResponse($comResponse)
+    private function checkResponse(Response $comResponse): ?array
     {
         // 网络响应失败
         if ($comResponse->getErrCode()) {
@@ -134,6 +179,11 @@ class YiLinkCloudDriver implements DriverInterface
 
         // 是否存在错误信息
         if (isset($contentArr['error']) && $contentArr['error'] != 0) {
+            // Token过期
+            if ((int)$contentArr['error'] === 18) {
+                $this->refreshToken();
+                throw new Exception("Access Token 过期，已为您重新获取，请重试");
+            }
             throw  new Exception('YiLinkCloud Api Error: ' . $contentArr['error_description']);
         }
 

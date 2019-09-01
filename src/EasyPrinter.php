@@ -22,11 +22,11 @@ class EasyPrinter
      * @param $clientSecret
      * @return mixed
      */
-    public static function yiLinkCloud($clientId, $clientSecret)
+    public static function yiLinkCloud($clientId, $clientSecret): YiLinkCloudDriver
     {
-        if (!(static::$yiLinkClouds[$clientId] instanceof YiLinkCloudDriver)) {
-            static::$yiLinkClouds[$clientId] = new YiLinkCloudDriver($clientId, $clientSecret);
+        if (isset(static::$yiLinkClouds[$clientId]) && (static::$yiLinkClouds[$clientId] instanceof YiLinkCloudDriver)) {
+            return static::$yiLinkClouds[$clientId];
         }
-        return static::$yiLinkClouds[$clientId];
+        return static::$yiLinkClouds[$clientId] = new YiLinkCloudDriver($clientId, $clientSecret);
     }
 }
